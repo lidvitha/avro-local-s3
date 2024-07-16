@@ -21,3 +21,113 @@ s3.batch.size=10
 s3.batch.time.ms=60000
 key.converter=org.apache.kafka.connect.storage.StringConverter
 value.converter=org.apache.kafka.connect.storage.StringConverter
+
+
+mvn clean package
+
+-----------------
+Start kafka zookeeper:
+
+bin\windows\zookeeper-server-start.bat config\zookeeper.properties
+bin\windows\kafka-server-start.bat config\server.properties
+
+------------------
+Create Topic: 
+
+bin\windows\kafka-topics.bat --create --topic new-test-topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+-------------------
+Produce:
+
+bin\windows\kafka-console-producer.bat --broker-list localhost:9092 --topic new-test-topic 
+
+{"schedulePaymentIdentifier": "id1", "accountIdentifierDetail": {"accountNumber": "1234567890", "last4AccountNumber": "7890", "productIdentifier": "prod123"}}
+{"schedulePaymentIdentifier": "id2", "accountIdentifierDetail": {"accountNumber": "2345678901", "last4AccountNumber": "8901", "productIdentifier": "prod234"}}
+{"schedulePaymentIdentifier": "id3", "accountIdentifierDetail": {"accountNumber": "3456789012", "last4AccountNumber": "9012", "productIdentifier": "prod345"}}
+
+--------------------
+Run Kafka Connect
+
+bin\windows\connect-standalone.bat C:\Users\ADMIN\Downloads\Projects\avro-latest\avro-s3-new\config\connect-standalone.properties C:\Users\ADMIN\Downloads\Projects\avro-latest\avro-s3-new\config\s3-sink-connector.properties
+
+
+
+_____________________________________________________
+
+AVRO Docker:
+
+
+mvn clean package
+
+docker-compose up --build -d
+
+
+-------
+curl:
+
+curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" http://localhost:8083/connectors/ -d @s3-sink-connector.json
+
+curl -X DELETE localhost:8083/connectors/s3-sink-connector
+
+curl -s localhost:8083/connectors/s3-sink-connector/status
+
+curl -s localhost:8083/connector-plugins
+
+----------
+create topic:
+
+docker exec kafka-4 kafka-topics --create --topic new-test-topic --bootstrap-server kafka:29092 --partitions 1 --replication-factor 1
+
+------
+Produce:
+
+docker run -it --rm --network="host" confluentinc/cp-schema-registry:latest bash
+
+kafka-avro-console-producer --broker-list localhost:9092 --topic new-test-topic --property value.schema='{
+  "name": "LoanRepaymentScheduleCreated",
+  "type": "record",
+  "version": 1,
+  "namespace": "com.example",
+  "fields": [
+    {
+      "name": "schedulePaymentIdentifier",
+      "type": "string"
+    },
+    {
+      "name": "accountIdentifierDetail",
+      "type": {
+        "name": "AccountIdentifierDetail",
+        "type": "record",
+        "fields": [
+          {
+            "name": "accountNumber",
+            "type": "string"
+          },
+          {
+            "name": "last4AccountNumber",
+            "type": "string"
+          },
+          {
+            "name": "productIdentifier",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ]
+}' 
+
+{"schedulePaymentIdentifier": "id3", "accountIdentifierDetail": {"accountNumber": "3456789012", "last4AccountNumber": "9012", "productIdentifier": "prod345"}}
+
+
+Error data:
+
+{"schedulePaymentIdentifier": "id2", "accountIdentifierDetail": {"accountNumber": "2345678901", "last4AccountNumber": "8901", "productIdentifier": "prod234"}}
+
+
+
+consume:
+
+docker run -it --rm --network="host" confluentinc/cp-schema-registry:latest bash
+
+kafka-avro-console-consumer --bootstrap-server localhost:9092 --topic new-test-topic --from-beginning --max-messages 3
+
