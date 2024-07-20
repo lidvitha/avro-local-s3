@@ -1,212 +1,105 @@
-
-"Test content" 
-copy custom-s3-sink-connector-0.0.1-SNAPSHOT.jar C:\kafka-connect-config\plugins
-C:\kafka\bin\windows\connect-standalone.bat C:\kafka-connect-config\connect-standalone.properties C:\kafka-connect-config\s3-sink-connector.properties
-
-bootstrap.servers=localhost:9092
-key.converter=org.apache.kafka.connect.storage.StringConverter
-value.converter=org.apache.kafka.connect.storage.StringConverter
-internal.key.converter=org.apache.kafka.connect.json.JsonConverter
-internal.value.converter=org.apache.kafka.connect.json.JsonConverter
-offset.storage.file.filename=C:/kafka-connect-config/connect.offsets
-plugin.path=C:/kafka-connect-config/plugins
-
-name=s3-sink-connector
-connector.class=com.example.S3SinkConnector
-tasks.max=1
-topics=new-test-topic
-s3.bucket.name=demo-kafka-s3
-s3.region=us-east-1
-s3.batch.size=10
-s3.batch.time.ms=60000
-key.converter=org.apache.kafka.connect.storage.StringConverter
-value.converter=org.apache.kafka.connect.storage.StringConverter
-
-
-mvn clean package
-
------------------
-Start kafka zookeeper:
-
-bin\windows\zookeeper-server-start.bat config\zookeeper.properties
-bin\windows\kafka-server-start.bat config\server.properties
-
-------------------
-Create Topic: 
-
-bin\windows\kafka-topics.bat --create --topic new-test-topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
--------------------
-Produce:
-
-bin\windows\kafka-console-producer.bat --broker-list localhost:9092 --topic new-test-topic 
-
-{"schedulePaymentIdentifier": "id1", "accountIdentifierDetail": {"accountNumber": "1234567890", "last4AccountNumber": "7890", "productIdentifier": "prod123"}}
-{"schedulePaymentIdentifier": "id2", "accountIdentifierDetail": {"accountNumber": "2345678901", "last4AccountNumber": "8901", "productIdentifier": "prod234"}}
-{"schedulePaymentIdentifier": "id3", "accountIdentifierDetail": {"accountNumber": "3456789012", "last4AccountNumber": "9012", "productIdentifier": "prod345"}}
-
---------------------
-Run Kafka Connect
-
-bin\windows\connect-standalone.bat C:\Users\ADMIN\Downloads\Projects\avro-latest\avro-s3-new\config\connect-standalone.properties C:\Users\ADMIN\Downloads\Projects\avro-latest\avro-s3-new\config\s3-sink-connector.properties
-
-
-
-_____________________________________________________
-
-AVRO Docker:
-
-
-mvn clean package
-
-docker-compose up --build -d
-
-
--------
-curl:
-
-curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" http://localhost:8083/connectors/ -d @s3-sink-connector.json
-
-curl -X DELETE localhost:8083/connectors/s3-sink-connector
-
-curl -s localhost:8083/connectors/s3-sink-connector/status
-
-curl -s localhost:8083/connector-plugins
-
-----------
-create topic:
-
-docker exec kafka-4 kafka-topics --create --topic new-test-topic --bootstrap-server kafka:29092 --partitions 1 --replication-factor 1
-
-------
-Produce:
-
-docker run -it --rm --network="host" confluentinc/cp-schema-registry:latest bash
-
-kafka-avro-console-producer --broker-list localhost:9092 --topic new-test-topic --property value.schema='{
-  "name": "LoanRepaymentScheduleCreated",
-  "type": "record",
-  "version": 1,
-  "namespace": "com.example",
-  "fields": [
-    {
-      "name": "schedulePaymentIdentifier",
-      "type": "string"
-    },
-    {
-      "name": "accountIdentifierDetail",
-      "type": {
-        "name": "AccountIdentifierDetail",
-        "type": "record",
-        "fields": [
-          {
-            "name": "accountNumber",
-            "type": "string"
-          },
-          {
-            "name": "last4AccountNumber",
-            "type": "string"
-          },
-          {
-            "name": "productIdentifier",
-            "type": "string"
-          }
-        ]
-      }
-    }
-  ]
-}' 
-
-{"schedulePaymentIdentifier": "id3", "accountIdentifierDetail": {"accountNumber": "3456789012", "last4AccountNumber": "9012", "productIdentifier": "prod345"}}
-
-
-Error data:
-
-{"schedulePaymentIdentifier": "id2", "accountIdentifierDetail": {"accountNumber": "2345678901", "last4AccountNumber": "8901", "productIdentifier": "prod234"}}
-
-
-
-consume:
-
-docker run -it --rm --network="host" confluentinc/cp-schema-registry:latest bash
-
-kafka-avro-console-consumer --bootstrap-server localhost:9092 --topic new-test-topic --from-beginning --max-messages 3
-
-
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://www.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
     <groupId>com.example</groupId>
-    <artifactId>custom-s3-sink-connector</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>custom-s3-sink-connector</name>
-    <description>Demo project for Kafka Connect</description>
-    <properties>
-        <java.version>17</java.version>
-    </properties>
+    <artifactId>s3-sink-connector</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
     <repositories>
         <repository>
             <id>confluent</id>
             <url>https://packages.confluent.io/maven/</url>
         </repository>
     </repositories>
+
     <dependencies>
-        <dependency>
-            <groupId>org.apache.kafka</groupId>
-            <artifactId>connect-api</artifactId>
-            <version>3.0.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-connect-avro-converter</artifactId>
-            <version>7.6.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-registry-client</artifactId>
-            <version>7.6.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-s3</artifactId>
-            <version>1.11.1000</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.parquet</groupId>
-            <artifactId>parquet-avro</artifactId>
-            <version>1.12.0</version>
-        </dependency>
         <dependency>
             <groupId>org.apache.avro</groupId>
             <artifactId>avro</artifactId>
             <version>1.10.2</version>
         </dependency>
         <dependency>
-            <groupId>org.apache.kafka</groupId>
-            <artifactId>kafka-clients</artifactId>
-            <version>3.0.0</version>
-        </dependency>
-        <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
-            <version>3.3.1</version>
+            <version>3.2.1</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-hdfs</artifactId>
-            <version>3.3.1</version>
+            <artifactId>hadoop-client</artifactId>
+            <version>3.2.1</version>
         </dependency>
         <dependency>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-mapreduce-client-core</artifactId>
-            <version>3.3.1</version>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-avro</artifactId>
+            <version>1.11.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-s3</artifactId>
+            <version>1.12.118</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-avro-converter</artifactId>
+            <version>5.5.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>connect-api</artifactId>
+            <version>2.8.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>2.8.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.12.4</version>
         </dependency>
     </dependencies>
+
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <version>1.10.2</version>
+                <executions>
+                    <execution>
+                        <id>avro-schema</id>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                        <phase>generate-sources</phase>
+                        <configuration>
+                            <imports>
+                                <import>C:/Users/ADMIN/Downloads/avro-s3-docker/avro-s3-docker/src/main/resources/LoanRepaymentScheduleCreated.avsc</import>
+                            </imports>
+                            <enableDecimalLogicalType>true</enableDecimalLogicalType>
+                            <sourceDirectory>C:/Users/ADMIN/Downloads/avro-s3-docker/avro-s3-docker/src/main/resources</sourceDirectory>
+                            <outputDirectory>C:/Users/ADMIN/Downloads/avro-s3-docker/avro-s3-docker/target/generated-sources</outputDirectory>
+                            <fieldVisibility>PRIVATE</fieldVisibility>
+                            <stringType>String</stringType>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.4.1</version>
+                <version>3.2.4</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -215,11 +108,12 @@ kafka-avro-console-consumer --bootstrap-server localhost:9092 --topic new-test-t
                         </goals>
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <artifactSet>
-                                <includes>
-                                    <include>*:*</include>
-                                </includes>
-                            </artifactSet>
+                            <relocations>
+                                <relocation>
+                                    <pattern>com.fasterxml.jackson</pattern>
+                                    <shadedPattern>com.example.shaded.com.fasterxml.jackson</shadedPattern>
+                                </relocation>
+                            </relocations>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.example.S3SinkConnector</mainClass>
@@ -233,3 +127,181 @@ kafka-avro-console-consumer --bootstrap-server localhost:9092 --topic new-test-t
     </build>
 </project>
 
+
+
+package com.example;
+
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.example.NonDecomposeFormat; // Ensure the correct import path for NonDecomposeFormat
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.Schema;
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.ParquetFileWriter;
+import org.apache.kafka.connect.header.Header;
+
+import org.apache.kafka.connect.data.Struct;
+
+
+import java.io.IOException;
+import java.nio.file.Files;
+
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+public class S3SinkTask extends SinkTask {
+    private AmazonS3 s3Client;
+    private String bucketName;
+    private Map<String, List<SinkRecord>> topicBuffers;
+    private Map<String, Long> topicLastFlushTimes;
+    private Map<String, String> topicFileKeys;
+    private int batchSize;
+    private long batchTimeMs;
+    private int eventCounter = 0;
+
+    @Override
+    public void start(Map<String, String> props) {
+        String accessKeyId = props.get(S3SinkConfig.AWS_ACCESS_KEY_ID);
+        String secretAccessKey = props.get(S3SinkConfig.AWS_SECRET_ACCESS_KEY);
+        bucketName = props.get(S3SinkConfig.S3_BUCKET_NAME);
+
+        BasicAWSCredentials awsCreds = new BasicAWSCredentials(accessKeyId, secretAccessKey);
+        s3Client = AmazonS3ClientBuilder.standard()
+                .withRegion(Regions.fromName(props.get(S3SinkConfig.S3_REGION)))
+                .withCredentials(new AWSStaticCredentialsProvider(awsCreds))
+                .build();
+
+        topicBuffers = new HashMap<>();
+        topicLastFlushTimes = new HashMap<>();
+        topicFileKeys = new HashMap<>();
+
+        batchSize = Integer.parseInt(props.get(S3SinkConfig.S3_BATCH_SIZE));
+        batchTimeMs = Long.parseLong(props.get(S3SinkConfig.S3_BATCH_TIME_MS));
+    }
+
+    @Override
+    public void put(Collection<SinkRecord> records) {
+        for (SinkRecord record : records) {
+            String topic = record.topic();
+            topicBuffers.computeIfAbsent(topic, k -> new ArrayList<>()).add(record);
+
+            // Print all headers for inspection
+            System.out.println("Headers for record in topic " + topic + ":");
+            for (Header header : record.headers()) {
+                System.out.println(header.key() + ": " + header.value());
+            }
+
+            if (topicBuffers.get(topic).size() >= batchSize || (System.currentTimeMillis() - topicLastFlushTimes.getOrDefault(topic, 0L)) >= batchTimeMs) {
+                flushRecords(topic);
+                topicFileKeys.put(topic, generateFileKey());
+            }
+        }
+    }
+
+    private void flushRecords(String topic) {
+        if (!topicBuffers.get(topic).isEmpty()) {
+            try {
+                String key = String.format("%s/%s", topic, topicFileKeys.getOrDefault(topic, generateFileKey()));
+                java.nio.file.Path tempFile = Files.createTempFile("parquet", ".parquet");
+
+                // Write records to Parquet file
+                try (ParquetWriter<NonDecomposeFormat> writer = AvroParquetWriter.<NonDecomposeFormat>builder(new Path(tempFile.toString()))
+                        .withSchema(NonDecomposeFormat.getClassSchema())
+                        .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+                        .withCompressionCodec(CompressionCodecName.SNAPPY)
+                        .build()) {
+
+                    for (SinkRecord record : topicBuffers.get(topic)) {
+                        NonDecomposeFormat avroRecord = createNonDecomposeFormatFromRecord(record);
+                        writer.write(avroRecord);
+                    }
+                }
+
+                // Upload Parquet file to S3
+                s3Client.putObject(new PutObjectRequest(bucketName, key, tempFile.toFile()));
+                topicBuffers.get(topic).clear();
+                topicLastFlushTimes.put(topic, System.currentTimeMillis());
+                Files.delete(tempFile);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+//    private NonDecomposeFormat createNonDecomposeFormatFromRecord(SinkRecord record) {
+//        NonDecomposeFormat nonDecomposeFormat = new NonDecomposeFormat();
+//        nonDecomposeFormat.setEventId(String.valueOf(getHeaderValue(record, "eventId")));
+//        nonDecomposeFormat.setPartition(String.valueOf(record.kafkaPartition()));
+//        nonDecomposeFormat.setUpdDate(String.valueOf(getHeaderValue(record, "updDate")));
+//        nonDecomposeFormat.setPublishTimestampStr(String.valueOf(getHeaderValue(record, "publishTimestampStr")));
+//        nonDecomposeFormat.setPayload(record.value().toString());
+//        nonDecomposeFormat.setTopic(record.topic());
+//        nonDecomposeFormat.setEventName(String.valueOf(getHeaderValue(record, "eventName")));
+//        nonDecomposeFormat.setEventVersionNumber(String.valueOf(getHeaderValue(record, "eventVersionNumber")));
+//        nonDecomposeFormat.setExecutionTimestampStr(String.valueOf(getHeaderValue(record, "executionTimestampStr")));
+//        return nonDecomposeFormat;
+//    }
+private NonDecomposeFormat createNonDecomposeFormatFromRecord(SinkRecord record) {
+    NonDecomposeFormat nonDecomposeFormat = new NonDecomposeFormat();
+    nonDecomposeFormat.setEventId(String.valueOf(getHeaderValue(record, "eventId")));
+    nonDecomposeFormat.setPartition(String.valueOf(record.kafkaPartition()));
+    nonDecomposeFormat.setUpdDate(String.valueOf(getHeaderValue(record, "updDate")));
+    nonDecomposeFormat.setPublishTimestampStr(String.valueOf(getHeaderValue(record, "publishTimestampStr")));
+
+    // Convert payload to JSON string
+    Struct valueStruct = (Struct) record.value();
+    Map<String, Object> payloadMap = new HashMap<>();
+    valueStruct.schema().fields().forEach(field -> {
+        payloadMap.put(field.name(), valueStruct.get(field));
+    });
+    ObjectMapper objectMapper = new ObjectMapper();
+    String payloadJson;
+    try {
+        payloadJson = objectMapper.writeValueAsString(payloadMap);
+        nonDecomposeFormat.setPayload(payloadJson);
+    } catch (JsonProcessingException e) {
+        e.printStackTrace();
+    }
+
+    nonDecomposeFormat.setTopic(record.topic());
+    nonDecomposeFormat.setEventName(String.valueOf(getHeaderValue(record, "eventName")));
+    nonDecomposeFormat.setEventVersionNumber(String.valueOf(getHeaderValue(record, "eventVersionNumber")));
+    nonDecomposeFormat.setExecutionTimestampStr(String.valueOf(getHeaderValue(record, "executionTimestampStr")));
+    return nonDecomposeFormat;
+}
+
+
+    private Object getHeaderValue(SinkRecord record, String headerKey) {
+        Header header = record.headers().lastWithName(headerKey);
+        return header != null ? header.value() : null;
+    }
+
+    private String generateFileKey() {
+        String timestamp = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+        return String.format("event%d-%s.parquet", eventCounter, timestamp);
+    }
+
+    @Override
+    public void stop() {
+        for (String topic : topicBuffers.keySet()) {
+            if (!topicBuffers.get(topic).isEmpty()) {
+                flushRecords(topic);
+            }
+        }
+    }
+
+    @Override
+    public String version() {
+        return "1.0";
+    }
+}
